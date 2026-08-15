@@ -1,0 +1,15 @@
+services:
+  monzo-actual-webhook:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: monzo-actual-webhook:local
+    pull_policy: never
+    container_name: monzo-actual-webhook
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - ./data/actual-cache:/app/data/actual-cache
