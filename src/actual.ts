@@ -19,7 +19,13 @@ export async function importTransaction(accountId: string, transaction: MonzoTra
     ...mapTransaction(transaction),
     account: accountId,
   }]);
-  console.info(`Actual import completed for transaction …${transaction.id.slice(-6)}: ${JSON.stringify(result)}`);
+  if (result.errors.length > 0) {
+    throw new Error(`Actual rejected ${result.errors.length} transaction import error(s)`);
+  }
+  console.info(
+    `Actual import completed for transaction …${transaction.id.slice(-6)}: ` +
+    `${result.added.length} added, ${result.updated.length} updated`,
+  );
 }
 
 export async function shutdownActual(): Promise<void> {
