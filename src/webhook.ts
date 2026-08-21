@@ -55,7 +55,14 @@ export function createApp(options: WebhookOptions): Express {
       return;
     }
 
-    if (transaction.decline_reason || transaction.include_in_spending === false) {
+    if (transaction.decline_reason) {
+      options.log?.(`Ignored declined transaction …${transaction.id.slice(-6)}`);
+      response.sendStatus(204);
+      return;
+    }
+
+    if (transaction.include_in_spending === false) {
+      options.log?.(`Ignored transaction …${transaction.id.slice(-6)} because include_in_spending=false`);
       response.sendStatus(204);
       return;
     }

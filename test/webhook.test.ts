@@ -9,6 +9,7 @@ afterEach(() => servers.splice(0).forEach(server => server.close()));
 
 async function post(type: string, data = transaction(), secret = 'test-secret') {
   const scheduleImport = vi.fn();
+  const log = vi.fn();
   const server = createServer(createApp({
     secret: 'test-secret',
     accountMappings: new Map([
@@ -16,6 +17,7 @@ async function post(type: string, data = transaction(), secret = 'test-secret') 
       ['acc_flex', 'actual_flex'],
     ]),
     scheduleImport,
+    log,
   }));
   servers.push(server);
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -23,7 +25,7 @@ async function post(type: string, data = transaction(), secret = 'test-secret') 
   const response = await fetch(`http://127.0.0.1:${port}/monzo/${secret}`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type, data }),
   });
-  return { response, scheduleImport };
+  return { response, scheduleImport, log };
 }
 
 describe('webhook receiver', () => {
@@ -37,6 +39,31 @@ describe('webhook receiver', () => {
 
   it('returns 404 for a wrong secret', async () => expect((await post('transaction.created', transaction(), 'wrong')).response.status).toBe(404));
   it('rejects a wrong account', async () => expect((await post('transaction.created', transaction({ account_id: 'acc_wrong' }))).response.status).toBe(400));
+
+  it('logs transactions ignored because they are excluded from spending', async () => {
+    const { response, scheduleImport, log } = await post(
+      'transaction.created',
+      transaction({ include_in_spending: false }),
+    );
+
+    expect(response.status).toBe(204);
+    expect(scheduleImport).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledWith(
+      'Ignored transaction …zed123 because include_in_spending=false',
+    );
+  });
+
+  it('logs declined transactions without exposing the decline reason', async () => {
+    const { response, scheduleImport, log } = await post(
+      'transaction.created',
+      transaction({ decline_reason: 'SENSITIVE_REASON' }),
+    );
+
+    expect(response.status).toBe(204);
+    expect(scheduleImport).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledWith('Ignored declined transaction …zed123');
+    expect(log).not.toHaveBeenCalledWith(expect.stringContaining('SENSITIVE_REASON'));
+  });
 
   it('routes Current and Flex transactions to different Actual accounts', async () => {
     const current = await post('transaction.created', transaction());
