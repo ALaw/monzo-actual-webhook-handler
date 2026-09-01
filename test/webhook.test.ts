@@ -40,17 +40,15 @@ describe('webhook receiver', () => {
   it('returns 404 for a wrong secret', async () => expect((await post('transaction.created', transaction(), 'wrong')).response.status).toBe(404));
   it('rejects a wrong account', async () => expect((await post('transaction.created', transaction({ account_id: 'acc_wrong' }))).response.status).toBe(400));
 
-  it('logs transactions ignored because they are excluded from spending', async () => {
+  it('imports transactions excluded from Monzo spending analysis', async () => {
     const { response, scheduleImport, log } = await post(
       'transaction.created',
       transaction({ include_in_spending: false }),
     );
 
     expect(response.status).toBe(204);
-    expect(scheduleImport).not.toHaveBeenCalled();
-    expect(log).toHaveBeenCalledWith(
-      'Ignored transaction …zed123 because include_in_spending=false',
-    );
+    expect(scheduleImport).toHaveBeenCalledOnce();
+    expect(log).toHaveBeenCalledWith('Accepted transaction.created transaction …zed123');
   });
 
   it('logs declined transactions without exposing the decline reason', async () => {
@@ -63,6 +61,35 @@ describe('webhook receiver', () => {
     expect(scheduleImport).not.toHaveBeenCalled();
     expect(log).toHaveBeenCalledWith('Ignored declined transaction …zed123');
     expect(log).not.toHaveBeenCalledWith(expect.stringContaining('SENSITIVE_REASON'));
+  });
+
+  it('imports and logs an identical snapshot only once', async () => {
+    const scheduleImport = vi.fn();
+    const log = vi.fn();
+    const server = createServer(createApp({
+      secret: 'test-secret',
+      accountMappings: new Map([['acc_sanitized', 'actual_current']]),
+      scheduleImport,
+      log,
+    }));
+    servers.push(server);
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as AddressInfo).port;
+    const body = JSON.stringify({
+      type: 'transaction.updated',
+      data: transaction({ include_in_spending: false }),
+    });
+    const send = () => fetch(`http://127.0.0.1:${port}/monzo/test-secret`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body,
+    });
+
+    await send();
+    await send();
+
+    expect(scheduleImport).toHaveBeenCalledOnce();
+    expect(log).toHaveBeenCalledTimes(1);
   });
 
   it('routes Current and Flex transactions to different Actual accounts', async () => {

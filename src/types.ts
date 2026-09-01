@@ -9,6 +9,7 @@ export interface MonzoTransaction {
   decline_reason?: string;
   include_in_spending?: boolean;
   merchant?: { name?: string | null } | string | null;
+  counterparty?: { name?: string | null } | null;
 }
 
 export interface ActualTransaction {

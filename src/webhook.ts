@@ -13,6 +13,7 @@ const transactionSchema = z.object({
   decline_reason: z.string().optional(),
   include_in_spending: z.boolean().optional(),
   merchant: z.union([z.object({ name: z.string().nullable().optional() }).passthrough(), z.string(), z.null()]).optional(),
+  counterparty: z.object({ name: z.string().nullable().optional() }).passthrough().nullable().optional(),
 }).passthrough();
 
 const webhookSchema = z.object({
@@ -55,25 +56,22 @@ export function createApp(options: WebhookOptions): Express {
       return;
     }
 
+    const snapshotKey = `${transaction.account_id}:${transaction.id}`;
+    const stored = snapshots.get(snapshotKey);
+    if (stored && !isNewerSnapshot(transaction, stored)) {
+      response.sendStatus(204);
+      return;
+    }
+    snapshots.set(snapshotKey, transaction);
+
     if (transaction.decline_reason) {
       options.log?.(`Ignored declined transaction …${transaction.id.slice(-6)}`);
       response.sendStatus(204);
       return;
     }
 
-    if (transaction.include_in_spending === false) {
-      options.log?.(`Ignored transaction …${transaction.id.slice(-6)} because include_in_spending=false`);
-      response.sendStatus(204);
-      return;
-    }
-
-    const snapshotKey = `${transaction.account_id}:${transaction.id}`;
-    const stored = snapshots.get(snapshotKey);
-    if (!stored || isNewerSnapshot(transaction, stored)) {
-      snapshots.set(snapshotKey, transaction);
-      options.scheduleImport(actualAccountId, transaction);
-      options.log?.(`Accepted ${parsed.data.type} transaction …${transaction.id.slice(-6)}`);
-    }
+    options.scheduleImport(actualAccountId, transaction);
+    options.log?.(`Accepted ${parsed.data.type} transaction …${transaction.id.slice(-6)}`);
 
     response.sendStatus(204);
   });

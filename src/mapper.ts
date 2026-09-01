@@ -19,11 +19,12 @@ export function mapTransaction(transaction: MonzoTransaction): ActualTransaction
     transaction.merchant && typeof transaction.merchant === 'object'
       ? transaction.merchant.name?.trim()
       : undefined;
+  const counterpartyName = transaction.counterparty?.name?.trim();
 
   return {
     date: toLondonDate(transaction.created),
     amount: transaction.amount,
-    payee_name: merchantName || transaction.description,
+    payee_name: merchantName || counterpartyName || transaction.description,
     notes: transaction.description,
     imported_id: `monzo:${transaction.id}`,
     cleared: transaction.settled.length > 0,

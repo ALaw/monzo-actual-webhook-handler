@@ -18,6 +18,17 @@ describe('Monzo transaction mapping', () => {
     expect(mapTransaction(transaction({ merchant: null })).payee_name).toBe('SANITIZED SHOP');
   });
 
+  it('uses the counterparty name when there is no merchant', () => {
+    expect(mapTransaction(transaction({
+      merchant: null,
+      counterparty: { name: 'Sanitized Sender' },
+      description: 'PAYMENT REFERENCE',
+    }))).toEqual(expect.objectContaining({
+      payee_name: 'Sanitized Sender',
+      notes: 'PAYMENT REFERENCE',
+    }));
+  });
+
   it('uses the Europe/London calendar day during BST', () => {
     expect(toLondonDate('2026-07-01T23:30:00Z')).toBe('2026-07-02');
   });
